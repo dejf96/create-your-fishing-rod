@@ -1,5 +1,9 @@
 # Project place file
+<<<<<<< HEAD
 /projekt.rbxlx
+=======
+/create-your-fishing-rod.rbxlx
+>>>>>>> aace542baf8fe19d1b2c18ba97ac5ef738efa6e2
 
 # Roblox Studio lock files
 /*.rbxlx.lock

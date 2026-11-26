@@ -1,5 +1,9 @@
 {
+<<<<<<< HEAD
   "name": "projekt",
+=======
+  "name": "create-your-fishing-rod",
+>>>>>>> aace542baf8fe19d1b2c18ba97ac5ef738efa6e2
   "tree": {
     "$className": "DataModel",
 
