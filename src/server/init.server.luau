@@ -1,92 +1,66 @@
 <<<<<<< HEAD
 print("Hello world, from server!")
 =======
+
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local CAST_SECONDS = 3
-local MAX_DISTANCE = 85
-local rng = Random.new()
+local fishingEvent = Instance.new("RemoteEvent")
+fishingEvent.Name = "FishingEvent"
+fishingEvent.Parent = ReplicatedStorage
 
-local loot = {
-    {name = "Zlom", weight = 45, value = 5},
-    {name = "Sruby", weight = 28, value = 12},
-    {name = "Monety", weight = 15, value = 25},
-    {name = "Czesci mechaniczne", weight = 9, value = 65},
-    {name = "Stary skarb", weight = 3, value = 200},
+local fishTypes = {
+    {name = "Karp", chance = 45, value = 10},
+    {name = "Okon", chance = 30, value = 20},
+    {name = "Losos", chance = 15, value = 50},
+    {name = "Zlota Ryba", chance = 8, value = 150},
+    {name = "Legendarny Rekin", chance = 2, value = 500},
 }
-
-local remote = ReplicatedStorage:FindFirstChild("MagnetFishingEvent") or Instance.new("RemoteEvent")
-remote.Name = "MagnetFishingEvent"
-remote.Parent = ReplicatedStorage
-
--- Temporary test pond; replace with a tagged/named water zone when building the map.
-local water = workspace:FindFirstChild("FishingWater")
-if not water then
-    water = Instance.new("Part")
-    water.Name = "FishingWater"
-    water.Anchored = true
-    water.CanCollide = false
-    water.Size = Vector3.new(90, 1, 65)
-    water.Position = Vector3.new(0, 0.2, -75)
-    water.Color = Color3.fromRGB(36, 155, 210)
-    water.Material = Enum.Material.Glass
-    water.Transparency = 0.25
-    water.Parent = workspace
-end
 
 local busy = {}
 
-local function rollLoot()
+local function rollFish()
+    local roll = math.random(1, 100)
     local total = 0
-    for _, item in ipairs(loot) do
-        total += item.weight
-    end
-    local roll = rng:NextNumber(0, total)
-    for _, item in ipairs(loot) do
-        roll -= item.weight
-        if roll <= 0 then
-            return item
+
+    for _, fish in ipairs(fishTypes) do
+        total += fish.chance
+
+        if roll <= total then
+            return fish
         end
     end
-    return loot[#loot]
+
+    return fishTypes[1]
 end
 
-local function makeValue(parent, name)
-    local value = parent:FindFirstChild(name) or Instance.new("IntValue")
-    value.Name = name
-    value.Parent = parent
-    return value
-end
-
-local function giveMagnet(player)
+local function createRod(player)
     local backpack = player:WaitForChild("Backpack")
-    if backpack:FindFirstChild("Magnes") then return end
-    local tool = Instance.new("Tool")
-    tool.Name = "Magnes"
-    tool.RequiresHandle = false
-    tool.CanBeDropped = false
-    tool.ToolTip = "Wyposaz magnes i kliknij w wode"
-    tool.Parent = backpack
+
+    local rod = Instance.new("Tool")
+    rod.Name = "Fishing Rod"
+    rod.RequiresHandle = false
+    rod.CanBeDropped = false
+    rod.ToolTip = "Kliknij, aby lowic ryby!"
+    rod.Parent = backpack
 end
 
 Players.PlayerAdded:Connect(function(player)
     local stats = Instance.new("Folder")
     stats.Name = "leaderstats"
     stats.Parent = player
-    makeValue(stats, "Coins")
-    makeValue(stats, "Finds")
 
-    local inventory = Instance.new("Folder")
-    inventory.Name = "Materials"
-    inventory.Parent = player
-    for _, item in ipairs(loot) do
-        makeValue(inventory, item.name)
-    end
+    local fishCount = Instance.new("IntValue")
+    fishCount.Name = "Fish"
+    fishCount.Parent = stats
+
+    local coins = Instance.new("IntValue")
+    coins.Name = "Coins"
+    coins.Parent = stats
 
     player.CharacterAdded:Connect(function()
         busy[player] = nil
-        giveMagnet(player)
+        createRod(player)
     end)
 end)
 
@@ -94,35 +68,40 @@ Players.PlayerRemoving:Connect(function(player)
     busy[player] = nil
 end)
 
-remote.OnServerEvent:Connect(function(player, hitPosition)
-    if busy[player] or typeof(hitPosition) ~= "Vector3" then return end
-    local character = player.Character
-    local root = character and character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    local magnet = character and character:FindFirstChild("Magnes")
-    if not root or not humanoid or humanoid.Health <= 0 or not magnet or not magnet:IsA("Tool") then return end
-
-    -- Never trust the client: validate the point against the server-owned pond.
-    local relative = water.CFrame:PointToObjectSpace(hitPosition)
-    if math.abs(relative.X) > water.Size.X / 2 or math.abs(relative.Z) > water.Size.Z / 2
-        or math.abs(relative.Y) > water.Size.Y / 2 + 2 then return end
-    if (root.Position - hitPosition).Magnitude > MAX_DISTANCE then return end
-
-    busy[player] = true
-    remote:FireClient(player, "START", CAST_SECONDS)
-    task.wait(CAST_SECONDS)
-
-    if player.Parent ~= Players or busy[player] ~= true then return end
-    busy[player] = nil
-    if not player.Character or player.Character ~= character or humanoid.Health <= 0 then
-        remote:FireClient(player, "CANCEL")
+fishingEvent.OnServerEvent:Connect(function(player)
+    if busy[player] then
         return
     end
 
-    local item = rollLoot()
-    player.Materials[item.name].Value += 1
-    player.leaderstats.Finds.Value += 1
-    -- Materials are stored, not automatically sold; crafting/selling comes next.
-    remote:FireClient(player, "CAUGHT", item.name, item.value)
+    local character = player.Character
+    local rod = character and character:FindFirstChild("Fishing Rod")
+
+    if not rod or not rod:IsA("Tool") then
+        return
+    end
+
+    busy[player] = true
+    fishingEvent:FireClient(player, "START")
+
+    task.wait(math.random(3, 6))
+
+    if player.Parent ~= Players then
+        busy[player] = nil
+        return
+    end
+
+    local fish = rollFish()
+
+    player.leaderstats.Fish.Value += 1
+    player.leaderstats.Coins.Value += fish.value
+
+    fishingEvent:FireClient(
+        player,
+        "CAUGHT",
+        fish.name,
+        fish.value
+    )
+
+    busy[player] = nil
 end)
->>>>>>> aace542baf8fe19d1b2c18ba97ac5ef738efa6e2
+>>>>>>> 9a2cd13f31d1d63fb03d0ab51ff4ebaa23340f98
